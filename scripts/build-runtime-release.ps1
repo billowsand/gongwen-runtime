@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("win-x64", "linux-arm64")]
+    [ValidateSet("win-x64", "linux-arm64", "linux-amd64")]
     [string]$Suffix,
 
     [string]$SourceRuntime = "",
