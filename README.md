@@ -11,6 +11,7 @@
 - `runtime-win-x64.zip`
 - `runtime-linux-arm64.zip`
 - `runtime-linux-amd64.zip`
+- `runtime-darwin-arm64.zip`
 
 每个压缩包解压后直接落在应用仓库的 `runtime/` 下，根目录应包含：
 
@@ -19,17 +20,21 @@ tectonic/
   win-x64/tectonic.exe        # Windows x64
   linux-arm64/tectonic        # Linux ARM64
   linux-amd64/tectonic        # Linux AMD64
+  darwin-arm64/tectonic       # macOS ARM64
 texbundle/gongwen-texlive.ttb
 fonts/FangSong.ttf
 fonts/KaiTi.ttf
 fonts/SimHei.ttf
 fonts/SimSun.ttf
 fonts/XiaoBiaoSong.ttf
+ime/dict.qj                   # 输入法词库（应用内输入法必需）
+ime/lm.qj                     # 输入法语言模型（可选，缺了就退到词级候选）
 SHA256SUMS.<suffix>.txt
 ```
 
 `SHA256SUMS.<suffix>.txt` 中的路径与压缩包内布局一致，供
-`scripts/package-portable.ps1` 校验。
+`scripts/package-portable.ps1` 校验。**只列在清单里的文件才会被打进应用包**：
+新增数据（如 `ime/`）忘了写进清单，应用装完就会缺文件、而且不报错。
 
 ## 构建发布资产
 
