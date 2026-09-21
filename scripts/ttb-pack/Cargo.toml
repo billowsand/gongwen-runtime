@@ -1,0 +1,11 @@
+[package]
+name = "ttb-pack"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tectonic_bundles = "=0.4.2"
+anyhow = "1"
+flate2 = "1"
+sha2 = "0.10"
+walkdir = "2"
