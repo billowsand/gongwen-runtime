@@ -1,6 +1,7 @@
 //! TTB v1（tectonicbundle）打包/解包工具。
 //! 用法：
 //!   ttb-pack dump <ttb> [index-out]   解析头部与索引
+//!   ttb-pack unpack <ttb> <out-dir>   解出全部内容文件（剥 resolved/ 前缀）
 //!   ttb-pack pack <dir> <out.ttb>     把 mdx 的目录 bundle 打成 ttb
 //!
 //! 格式依据 tectonic_bundles 0.4.2 的读取端（ttb.rs / ttb_fs.rs）与上一版
@@ -47,6 +48,60 @@ fn gunzip(data: &[u8]) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     dec.read_to_end(&mut out)?;
     Ok(out)
+}
+
+/// 把 ttb 的全部内容文件解到目录（剥掉 resolved/ 前缀，跳过 ITAR 元数据）。
+/// 供「并集合并」用：新版目录 bundle 缺什么，从旧 ttb 里补回来。
+fn unpack(ttb: &str, out_dir: &str) -> Result<()> {
+    let mut file = std::fs::File::open(ttb)?;
+    let mut raw = [0u8; HEADER_LEN];
+    file.read_exact(&mut raw)?;
+    if &raw[0..14] != MAGIC {
+        bail!("不是 tectonicbundle 文件");
+    }
+    let index_start = u64::from_le_bytes(raw[18..26].try_into()?);
+    let index_gzip_len = u32::from_le_bytes(raw[26..30].try_into()?);
+    file.seek(SeekFrom::Start(index_start))?;
+    let mut gz = vec![0u8; index_gzip_len as usize];
+    file.read_exact(&mut gz)?;
+    let index = String::from_utf8(gunzip(&gz)?)?;
+
+    let mut count = 0usize;
+    let mut in_filelist = false;
+    for line in index.lines() {
+        if line.starts_with('[') {
+            in_filelist = line == "[FILELIST]";
+            continue;
+        }
+        if !in_filelist || line.trim().is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(5, ' ');
+        let (Some(start), Some(gzip_len), Some(_real), Some(_hash), Some(path)) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) else {
+            continue;
+        };
+        let Some(rel) = path.strip_prefix("resolved/") else {
+            continue; // FILELIST / SEARCH / SHA256SUM 等元数据不解
+        };
+        let start: u64 = start.parse()?;
+        let gzip_len: u64 = gzip_len.parse()?;
+        file.seek(SeekFrom::Start(start))?;
+        let mut blob = vec![0u8; gzip_len as usize];
+        file.read_exact(&mut blob)?;
+        let bytes = gunzip(&blob)?;
+        let dest = std::path::Path::new(out_dir).join(rel);
+        std::fs::create_dir_all(dest.parent().unwrap())?;
+        std::fs::write(&dest, bytes)?;
+        count += 1;
+    }
+    println!("解出 {count} 个文件到 {out_dir}");
+    Ok(())
 }
 
 fn dump(ttb: &str, index_out: Option<&str>) -> Result<()> {
@@ -188,9 +243,11 @@ fn main() -> Result<()> {
     match args.as_slice() {
         [_, cmd, ttb] if cmd == "dump" => dump(ttb, None),
         [_, cmd, ttb, out] if cmd == "dump" => dump(ttb, Some(out)),
+        [_, cmd, ttb, out_dir] if cmd == "unpack" => unpack(ttb, out_dir),
         [_, cmd, dir, out] if cmd == "pack" => pack(dir, out),
         _ => {
             eprintln!("usage: ttb-pack dump <ttb> [index-out]");
+            eprintln!("       ttb-pack unpack <ttb> <out-dir>");
             eprintln!("       ttb-pack pack <dir> <out.ttb>");
             std::process::exit(2);
         }
